@@ -1,0 +1,18 @@
+# Claude Code instructions — local only, not for repo
+CLAUDE.md
+
+# Environment
+.env
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Large files — never commit these
+results/embeddings/
+results/probes/
+*.npy
+*.pt
+*.bin
+
+# OS
+.DS_Store
