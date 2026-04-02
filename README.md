@@ -76,4 +76,4 @@ spatial_probing/
 
 ## Authors
 
-* (your name here)
+Nora Gully
