@@ -15,7 +15,7 @@ class VSRExample:
     image_id: str
     image: Optional[Image.Image]  # PIL Image or None if load fails
     caption: str
-    relation_type: str
+    relation: str
     label: bool  # True = caption correctly describes image, False = negative
 
 
@@ -34,7 +34,7 @@ class VSRDataset:
     Paper: Liu et al. (2022) "Visual Spatial Reasoning"
     https://arxiv.org/abs/2205.00363
     
-    Format: (image, caption, relation_type, label)
+    Format: (image, caption, relation, label)
     Relations: 66 spatial relation types (on, under, above, below, left of, etc.)
     Size: ~10k examples
     """
@@ -78,7 +78,7 @@ class VSRDataset:
             image_id=row.get("image_id", str(idx)),
             image=image,
             caption=row["caption"],
-            relation_type=row["relation_type"],
+            relation=row["relation"],
             label=row["label"],
         )
 
@@ -97,9 +97,9 @@ class VSRDataset:
                 images.append(None)
         return images
 
-    def get_relation_types(self) -> np.ndarray:
+    def get_relations(self) -> np.ndarray:
         """Get relation type label for each example (string array)."""
-        return np.array([row["relation_type"] for row in self.hf_dataset])
+        return np.array([row["relation"] for row in self.hf_dataset])
 
     def get_binary_labels(self) -> np.ndarray:
         """Get True/False labels (1/0) for each example."""
@@ -107,14 +107,14 @@ class VSRDataset:
 
     def get_unique_relations(self) -> list[str]:
         """Get sorted list of unique relation types in this split."""
-        relations = set(row["relation_type"] for row in self.hf_dataset)
+        relations = set(row["relation"] for row in self.hf_dataset)
         return sorted(list(relations))
 
     def relation_counts(self) -> dict[str, int]:
         """Count examples per relation type."""
         counts = {}
         for row in self.hf_dataset:
-            rel = row["relation_type"]
+            rel = row["relation"]
             counts[rel] = counts.get(rel, 0) + 1
         return counts
 
@@ -122,7 +122,7 @@ class VSRDataset:
         """Get (true_count, false_count) per relation type."""
         balance = {}
         for row in self.hf_dataset:
-            rel = row["relation_type"]
+            rel = row["relation"]
             label = row["label"]
             if rel not in balance:
                 balance[rel] = [0, 0]
