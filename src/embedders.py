@@ -215,41 +215,55 @@ class CLIPMultimodalEmbedder(BaseEmbedder):
         return result
 
     def embed_image_text(
-        self, images: list, texts: list[str], batch_size: int = 32
+        self,
+        images: list,
+        texts: list[str],
+        batch_size: int = 32,
+        fusion: str = "average",
     ) -> np.ndarray:
         """
         Embed image-text pairs jointly with CLIP.
-        
+
+        Design note — fusion strategy:
+            "average": mean of L2-normalized image and text embeddings → (N, 512).
+                Keeps the output in CLIP's shared embedding space but may dilute
+                spatial signal that lives primarily in the image embedding.
+            "concat": concatenate image and text embeddings before normalizing → (N, 1024).
+                Preserves both signals independently, letting the probe access each.
+                Preferred when the goal is maximum probe sensitivity.
+
         Args:
-            images: List of PIL Images
+            images: List of PIL Images (None entries are treated as failed loads)
             texts: List of text strings
             batch_size: Batch size
+            fusion: "average" or "concat"
 
         Returns:
-            (N, 512) L2-normalized embeddings
+            L2-normalized embeddings, shape (N, 512) for average, (N, 1024) for concat
         """
+        assert fusion in ("average", "concat"), f"fusion must be 'average' or 'concat', got {fusion!r}"
         assert len(images) == len(texts), "images and texts must have same length"
-        
-        print(f"Embedding {len(images)} image-text pairs with CLIP multimodal (batch_size={batch_size})...")
-        
+
+        out_dim = 512 if fusion == "average" else 1024
+        print(f"Embedding {len(images)} image-text pairs with CLIP multimodal "
+              f"(fusion={fusion}, batch_size={batch_size})...")
+
         embeddings = []
-        
+
         with torch.no_grad():
             for i in tqdm(range(0, len(images), batch_size)):
                 batch_images = images[i : i + batch_size]
                 batch_texts = texts[i : i + batch_size]
-                
-                # Filter out None images
+
                 valid_pairs = [
                     (img, txt) for img, txt in zip(batch_images, batch_texts) if img is not None
                 ]
-                
+
                 if not valid_pairs:
-                    # All images in batch failed — use text-only
-                    batch_emb = np.zeros((len(batch_images), 512), dtype=np.float32)
+                    batch_emb = np.zeros((len(batch_images), out_dim), dtype=np.float32)
                 else:
                     valid_images, valid_texts = zip(*valid_pairs)
-                    
+
                     inputs = self.processor(
                         text=list(valid_texts),
                         images=list(valid_images),
@@ -258,36 +272,33 @@ class CLIPMultimodalEmbedder(BaseEmbedder):
                         max_length=77,
                         return_tensors="pt",
                     ).to(self.device)
-                    
+
                     outputs = self.model(**inputs)
-                    
-                    # Get multimodal embeddings
-                    # CLIP projects both to same embedding space
-                    # Use image embeddings if available, else text embeddings
-                    image_emb = outputs.image_embeds  # (n_valid, 512)
-                    text_emb = outputs.text_embeds    # (n_valid, 512)
-                    
-                    # Average image and text embeddings
-                    multimodal_emb = (image_emb + text_emb) / 2.0
-                    
-                    # Convert to numpy and L2 normalize
-                    multimodal_emb = multimodal_emb.cpu().numpy()
-                    multimodal_emb = multimodal_emb / np.linalg.norm(
-                        multimodal_emb, axis=1, keepdims=True
-                    )
-                    
-                    # Fill in the full batch (using zeros for failed images)
-                    batch_emb = np.zeros((len(batch_images), 512), dtype=np.float32)
+                    image_emb = outputs.image_embeds.cpu().numpy()  # (n_valid, 512)
+                    text_emb = outputs.text_embeds.cpu().numpy()    # (n_valid, 512)
+
+                    # L2-normalize each modality before fusion
+                    image_emb = image_emb / np.linalg.norm(image_emb, axis=1, keepdims=True)
+                    text_emb = text_emb / np.linalg.norm(text_emb, axis=1, keepdims=True)
+
+                    if fusion == "average":
+                        fused = (image_emb + text_emb) / 2.0
+                    else:  # concat
+                        fused = np.concatenate([image_emb, text_emb], axis=1)  # (n_valid, 1024)
+
+                    # L2-normalize the fused vector
+                    fused = fused / np.linalg.norm(fused, axis=1, keepdims=True)
+
+                    batch_emb = np.zeros((len(batch_images), out_dim), dtype=np.float32)
                     valid_idx = [
-                        j for j, (img, _) in enumerate(zip(batch_images, batch_texts))
-                        if img is not None
+                        j for j, img in enumerate(batch_images) if img is not None
                     ]
-                    batch_emb[valid_idx] = multimodal_emb
-                
+                    batch_emb[valid_idx] = fused
+
                 embeddings.append(batch_emb)
-        
+
         result = np.vstack(embeddings)
-        assert result.shape == (len(images), 512)
+        assert result.shape == (len(images), out_dim)
         return result
 
 
