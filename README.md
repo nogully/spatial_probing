@@ -1,4 +1,4 @@
-# Spatial Reasoning Probing Study — Study 1
+# Spatial Reasoning Probing Study
 
 **Does visual training help language models understand space?**
 
@@ -18,7 +18,11 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ---
 
-## Results
+## Main Deliverable
+
+[spatial_probing_results.ipynb](spatial_probing_results.ipynb)
+
+## Results Summary
 
 ### Mean F1 by Model (36 relations, min 50 examples)
 
@@ -80,9 +84,9 @@ pip install -r requirements.txt
 
 ### Embedding Extraction (Google Colab — GPU required)
 
-You will need:
-- A **GitHub Personal Access Token** (to clone the repo in Colab)
-- A **HuggingFace token** (to suppress rate-limit warnings when downloading models)
+You may need:
+- A **GitHub Personal Access Token** (to clone the repo in Colab - should be able to do without tho)
+- A **HuggingFace token** (optional - to suppress rate-limit warnings when downloading models)
 
 Open `notebooks/02_embedding_extraction.ipynb`, run the Colab setup cell (mounts Drive, clones repo, installs deps), then run all cells. Embeddings are cached to Google Drive as `.npy` files.
 
@@ -94,11 +98,11 @@ Sync the following files to `results/embeddings/` locally before running probing
 
 ### Probing and Visualization (local)
 
-Run notebooks 03–05 locally in order:
+Run notebooks 03 + 05 locally:
 
 ```
 notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs
-notebooks/05_visualization.ipynb         # all publication figures
+notebooks/05_visualization.ipynb         # all graphics (I like data viz)
 ```
 
 ---
