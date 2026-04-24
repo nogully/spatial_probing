@@ -248,7 +248,8 @@ class CLIPMultimodalEmbedder(BaseEmbedder):
                         images=list(valid_images),
                         return_tensors="pt",
                     ).to(self.device)
-                    outputs = self.model.get_image_features(**inputs).cpu().numpy()
+                    vision_out = self.model.vision_model(pixel_values=inputs["pixel_values"])
+                    outputs = self.model.visual_projection(vision_out.pooler_output).cpu().numpy()
                     outputs = outputs / np.linalg.norm(outputs, axis=1, keepdims=True)
                     batch_emb[list(idxs)] = outputs
 
