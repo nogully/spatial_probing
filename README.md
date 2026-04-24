@@ -41,10 +41,6 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ![Model Comparison](results/figures/05_model_comparison.png)
 
-### RSA: Model-to-Model Representational Similarity
-
-![RSA Heatmap](results/figures/04_rsa_correlation_heatmap.png)
-
 ### Relation Type Clustering (by CLIP Text Embedding Similarity)
 
 ![Relation Dendrogram](results/figures/05_relation_dendrogram.png)
@@ -102,7 +98,6 @@ Run notebooks 03–05 locally in order:
 
 ```
 notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs
-notebooks/04_rsa_analysis.ipynb          # RSA + odd-one-out ranking
 notebooks/05_visualization.ipynb         # all publication figures
 ```
 
@@ -120,14 +115,12 @@ spatial_probing/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_embedding_extraction.ipynb    # run on Colab
 │   ├── 03_probing_experiments.ipynb
-│   ├── 04_rsa_analysis.ipynb
 │   └── 05_visualization.ipynb
 │
 ├── src/
 │   ├── datasets.py              # VSR loader
 │   ├── embedders.py             # SBERT, CLIP text, image, concat embedders
-│   ├── probing.py               # logistic regression probe + CV
-│   └── analysis.py              # RSA, RDM, odd-one-out ranking
+│   └── probing.py               # logistic regression probe + CV
 │
 └── results/
     ├── embeddings/              # cached .npy files — gitignored

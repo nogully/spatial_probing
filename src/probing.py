@@ -1,6 +1,6 @@
 """Probing classifiers for spatial relation representations."""
 
-from typing import Tuple, Dict, List, Optional
+from typing import Dict
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -185,50 +185,6 @@ def probe_by_relation_type(
 
     return pd.DataFrame(results_list).sort_values("f1_macro_mean", ascending=False)
 
-
-def probe_weight_analysis(
-    embeddings: np.ndarray,
-    labels: np.ndarray,
-    dim_names: Optional[List[str]] = None,
-    top_k: int = 10,
-) -> Tuple[np.ndarray, List[Tuple[str, float]]]:
-    """
-    Analyze probe weight to find most diagnostic dimensions.
-
-    Train a logistic regression probe without CV and extract learned weights.
-    Returns the top-k dimensions by weight magnitude.
-
-    Args:
-        embeddings: (N, dim) array of embeddings
-        labels: (N,) array of binary labels
-        dim_names: Optional list of dimension names (e.g., ["D0", "D1", ...])
-        top_k: Number of top dimensions to return
-
-    Returns:
-        Tuple of (coef array, list of (name/index, weight) tuples for top-k dims)
-    """
-    # Train on full data (not CV) for weight extraction
-    clf = LogisticRegression(C=1.0, max_iter=1000, solver="lbfgs", random_state=42)
-    clf.fit(embeddings, labels)
-
-    # Get weights (shape: (1, dim) for binary, (n_classes, dim) for multiclass)
-    coef = clf.coef_
-    if coef.shape[0] == 1:
-        # Binary classification
-        weights = coef[0]
-    else:
-        # Multiclass: use magnitude across all classes
-        weights = np.abs(coef).max(axis=0)
-
-    # Get top-k by magnitude
-    top_indices = np.argsort(np.abs(weights))[-top_k:][::-1]
-
-    if dim_names is None:
-        dim_names = [f"D{i}" for i in range(len(weights))]
-
-    top_dims = [(dim_names[i], weights[i]) for i in top_indices]
-
-    return coef, top_dims
 
 
 def model_comparison_table(
