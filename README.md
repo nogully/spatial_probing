@@ -1,97 +1,151 @@
-# Overview 
+# Spatial Reasoning Probing Study — Study 1
 
-One problem with LLMs is, having been trained on text and text alone, that they have a pretty poor representation of the world, and as such do very badly at spatial reasoning with language. 
+**Does visual training help language models understand space?**
 
-We know this because of benchmark datasets such as StepGame, which (loosely speaking) describe scenes and then pose the models questions about where things are in that space. 
+One known weakness of language models is spatial reasoning. Having learned from text alone, they have no perceptual grounding for concepts like *above*, *left of*, or *inside* — they've only ever seen these words in context, never experienced what they refer to.
 
-So what I’m wondering is, as models are becoming more multimodal, does training a model on additional media besides just text help it make sense of the linguistic spatial concepts that we take for granted? 
+CLIP changes the training regime: instead of predicting masked tokens, it learns to align image-caption pairs. The hypothesis here is that this contrastive visual training leaves a residue in the text embedding space — making spatial relations more linearly decodable, even when no image is present at inference time.
 
-I’ll explore different types of models, such as Sentence-BERT, which is text-only, and CLIP, a model trained on image-caption pairs.
+This study tests that hypothesis using **probing classifiers**: lightweight logistic regression models trained on frozen embeddings to ask whether spatial relation labels are linearly decodable from each representation.
 
-The goal isn't just to see which model performs better on spatial reasoning, it’s to look into the model’s embeddings to figure out which spatial concepts benefit from additional training — and for this I’m going to try and use probing classifiers, which are a way of looking "under the hood", so to speak.
+> *N.B. I am disclosing that I used AI (Claude Code) to assist with coding in this project, as encouraged in the course. Research design, experimental decisions, and interpretation of results are my own.*
 
-N.B. We are encouraged to use AI to code in this class, so I'm disclosing that here. The research design and insights are all mine, based on the ML and NLP classes I'm taking currently. 
+---
 
-# Spatial Reasoning Probing Study – Study 1
+## Research Question
 
-Investigating whether visually grounded embeddings (CLIP) encode spatial relations better than purely distributional embeddings (BERT/SBERT) using probing classifiers.
+> Does visual contrastive training (CLIP) produce text embeddings that encode spatial relations better than purely distributional training (SBERT)? And which specific relation types benefit — or remain resistant?
 
-## Core Research Question
+---
 
-Does visual contrastive training (CLIP) produce text embeddings that encode spatial relations better than purely distributional training (BERT/SBERT)? And which specific spatial relation types benefit — or remain resistant?
+## Results
 
-## Quick Start
+### Mean F1 by Model (36 relations, min 50 examples)
+
+| Model | Mean F1 |
+|---|---|
+| SBERT (`all-mpnet-base-v2`) | 0.710 |
+| CLIP Text encoder | 0.589 |
+| CLIP Concat (image + text, 1024d) | 0.514 |
+| CLIP Image encoder | 0.493 |
+
+### Main Results Heatmap
+
+![Main Results Heatmap](results/figures/05_main_heatmap.png)
+
+### CLIP Text vs SBERT / CLIP Image
+
+![CLIP Gains](results/figures/05_clip_gains.png)
+
+### F1 Distribution across Models
+
+![Model Comparison](results/figures/05_model_comparison.png)
+
+### RSA: Model-to-Model Representational Similarity
+
+![RSA Heatmap](results/figures/04_rsa_correlation_heatmap.png)
+
+### Relation Type Clustering (by CLIP Text Embedding Similarity)
+
+![Relation Dendrogram](results/figures/05_relation_dendrogram.png)
+
+---
+
+## Models
+
+| Model | Type | Training Objective | Visual Signal |
+|---|---|---|---|
+| `sentence-transformers/all-mpnet-base-v2` | SBERT | NLI + semantic similarity | None |
+| `openai/clip-vit-base-patch32` (text encoder) | CLIP Text | Contrastive image-text | Indirect |
+| `openai/clip-vit-base-patch32` (image encoder) | CLIP Image | Contrastive image-text | Direct |
+| CLIP text + image (concat, 1024d) | CLIP Concat | Contrastive image-text | Both |
+
+---
+
+## Dataset
+
+**VSR — Visual Spatial Reasoning** (Liu et al., 2022)
+- ~7,680 training examples (image, caption, relation type, True/False label)
+- 64 relation types; 36 retained after filtering relations with fewer than 50 examples
+- Images are COCO images fetched at runtime; only filenames stored in the HuggingFace dataset
+
+---
+
+## Reproducing the Results
+
+### Environment
 
 ```bash
+git clone https://github.com/nogully/spatial_probing.git
+cd spatial_probing
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Development runs locally in VS Code. GPU-bound embedding extraction runs on Google Colab.
+### Embedding Extraction (Google Colab — GPU required)
+
+You will need:
+- A **GitHub Personal Access Token** (to clone the repo in Colab)
+- A **HuggingFace token** (to suppress rate-limit warnings when downloading models)
+
+Open `notebooks/02_embedding_extraction.ipynb`, run the Colab setup cell (mounts Drive, clones repo, installs deps), then run all cells. Embeddings are cached to Google Drive as `.npy` files.
+
+Sync the following files to `results/embeddings/` locally before running probing:
+- `sbert_vsr_train.npy`
+- `clip_text_vsr_train.npy`
+- `clip_image_vsr_train.npy`
+- `clip_concat_vsr_train.npy`
+
+### Probing and Visualization (local)
+
+Run notebooks 03–05 locally in order:
+
+```
+notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs
+notebooks/04_rsa_analysis.ipynb          # RSA + odd-one-out ranking
+notebooks/05_visualization.ipynb         # all publication figures
+```
+
+---
 
 ## Project Structure
 
 ```
 spatial_probing/
-├── CLAUDE.md              # detailed implementation guide (not committed)
-├── README.md              # this file
-├── requirements.txt       # dependencies
-├── .env                   # gitignored (local config)
+├── README.md
+├── requirements.txt
+├── .env                         # gitignored — set CACHE_DIR here
 │
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
-│   ├── 02_embedding_extraction.ipynb
+│   ├── 02_embedding_extraction.ipynb    # run on Colab
 │   ├── 03_probing_experiments.ipynb
 │   ├── 04_rsa_analysis.ipynb
 │   └── 05_visualization.ipynb
 │
 ├── src/
-│   ├── __init__.py
-│   ├── datasets.py        # dataset loading + preprocessing
-│   ├── embedders.py       # model loading + embedding extraction
-│   ├── probing.py         # probe training + evaluation
-│   └── analysis.py        # RSA, ranking tasks, visualization helpers
+│   ├── datasets.py              # VSR loader
+│   ├── embedders.py             # SBERT, CLIP text, image, concat embedders
+│   ├── probing.py               # logistic regression probe + CV
+│   └── analysis.py              # RSA, RDM, odd-one-out ranking
 │
 └── results/
-    ├── embeddings/        # cached .npy files (gitignored)
-    ├── probes/            # saved probe models (gitignored)
-    └── figures/           # output plots
+    ├── embeddings/              # cached .npy files — gitignored
+    └── figures/                 # output plots
 ```
 
-## Models Under Study
+---
 
-1. **Sentence-BERT** (`sentence-transformers/all-mpnet-base-v2`) — baseline distributional model
-2. **CLIP Text** (`openai/clip-vit-base-patch32` text encoder) — contrastive training, text-only
-3. **CLIP Multimodal** (text + image) — contrastive training, joint embedding
-
-## Datasets
-
-- **VSR** (Visual Spatial Reasoning) — primary dataset, 10k examples with images
-- **SpartQA** — text-only multi-hop spatial inference
-- **StepGame** — structured complexity scaling
-
-## Build Order
-
-1. `src/datasets.py` — VSR loader
-2. `src/embedders.py` — SBERT and CLIP text embedders
-3. `notebooks/01_data_exploration.ipynb`
-4. `notebooks/02_embedding_extraction.ipynb`
-5. `src/probing.py` — logistic regression probe
-6. `notebooks/03_probing_experiments.ipynb`
-7. Add CLIP multimodal embedder
-8. `src/analysis.py` — RSA
-9. `notebooks/04_rsa_analysis.ipynb`
-10. `notebooks/05_visualization.ipynb`
-
-## Key References
+## References
 
 - Radford et al. (2021) — CLIP: [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
+- Reimers & Gurevych (2019) — SBERT: [Sentence-BERT](https://arxiv.org/abs/1908.10084)
 - Liu et al. (2022) — VSR: [Visual Spatial Reasoning](https://arxiv.org/abs/2205.00363)
-- Belinkov (2022) — Probing Classifiers survey: [Promises, Shortcomings, and Advances](https://direct.mit.edu/coli/article/48/1/207/107571)
+- Belinkov (2022) — [Probing Classifiers: Promises, Shortcomings, and Advances](https://direct.mit.edu/coli/article/48/1/207/107571)
+- Tong et al. (2024) — [Eyes Wide Shut? Exploring the Visual Shortcomings of Multimodal LLMs](https://arxiv.org/abs/2401.06209)
 
-## Authors
+---
 
-Nora Gully
+## Author
 
-## Class
-
-University of Colorado at Boulder 4622 Machine Learning Spring 2026
+Nora Gully — University of Colorado Boulder, CSCI 4622 Machine Learning, Spring 2026
