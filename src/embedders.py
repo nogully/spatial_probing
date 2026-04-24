@@ -159,12 +159,17 @@ class CLIPTextEmbedder(BaseEmbedder):
 class CLIPMultimodalEmbedder(BaseEmbedder):
     """
     CLIP with image and text joint embedding.
-    
+
     Model: openai/clip-vit-base-patch32 (full model)
-    
-    Note: Encodes image and text separately, then mixes (e.g., average pool).
-    This studies whether having access to images during training improves
-    spatial relation encoding in the text embedding space.
+
+    Supports three extraction modes:
+      embed_image()      — image encoder only (512d) — tests visual spatial encoding directly
+      embed_text()       — text encoder only (512d) — same as CLIPTextEmbedder
+      embed_image_text() — concat fusion (1024d)    — probe accesses both modalities independently
+
+    Averaging was the original default but is methodologically unsound for probing:
+    it can cancel signal that lives in opposite directions across modalities.
+    Concat is preferred — it lets the probe learn to weight each modality.
     """
 
     def __init__(self, model_name: str = "openai/clip-vit-base-patch32"):
@@ -214,32 +219,68 @@ class CLIPMultimodalEmbedder(BaseEmbedder):
         assert result.shape == (len(texts), 512)
         return result
 
+    def embed_image(self, images: list, batch_size: int = 32) -> np.ndarray:
+        """
+        Embed images using CLIP image encoder only (512d).
+
+        Tests whether the visual encoder directly encodes spatial relations,
+        independent of any text signal.
+
+        Args:
+            images: List of PIL Images (None entries get zero vectors)
+            batch_size: Batch size
+
+        Returns:
+            (N, 512) array of L2-normalized image embeddings
+        """
+        print(f"Embedding {len(images)} images with CLIP image encoder (batch_size={batch_size})...")
+        embeddings = []
+
+        with torch.no_grad():
+            for i in tqdm(range(0, len(images), batch_size)):
+                batch_images = images[i : i + batch_size]
+                valid = [(j, img) for j, img in enumerate(batch_images) if img is not None]
+
+                batch_emb = np.zeros((len(batch_images), 512), dtype=np.float32)
+                if valid:
+                    idxs, valid_images = zip(*valid)
+                    inputs = self.processor(
+                        images=list(valid_images),
+                        return_tensors="pt",
+                    ).to(self.device)
+                    outputs = self.model.get_image_features(**inputs).cpu().numpy()
+                    outputs = outputs / np.linalg.norm(outputs, axis=1, keepdims=True)
+                    batch_emb[list(idxs)] = outputs
+
+                embeddings.append(batch_emb)
+
+        result = np.vstack(embeddings)
+        assert result.shape == (len(images), 512)
+        return result
+
     def embed_image_text(
         self,
         images: list,
         texts: list[str],
         batch_size: int = 32,
-        fusion: str = "average",
+        fusion: str = "concat",
     ) -> np.ndarray:
         """
-        Embed image-text pairs jointly with CLIP.
+        Embed image-text pairs jointly with CLIP using concat fusion (1024d).
 
-        Design note — fusion strategy:
-            "average": mean of L2-normalized image and text embeddings → (N, 512).
-                Keeps the output in CLIP's shared embedding space but may dilute
-                spatial signal that lives primarily in the image embedding.
-            "concat": concatenate image and text embeddings before normalizing → (N, 1024).
-                Preserves both signals independently, letting the probe access each.
-                Preferred when the goal is maximum probe sensitivity.
+        Concat is the correct default for probing: it preserves image and text
+        signals in separate halves of the vector so the probe can weight each
+        independently. Averaging was the original default but cancels signal
+        that lives in opposite directions across modalities.
 
         Args:
             images: List of PIL Images (None entries are treated as failed loads)
             texts: List of text strings
             batch_size: Batch size
-            fusion: "average" or "concat"
+            fusion: "concat" (recommended) or "average"
 
         Returns:
-            L2-normalized embeddings, shape (N, 512) for average, (N, 1024) for concat
+            L2-normalized embeddings, shape (N, 1024) for concat, (N, 512) for average
         """
         assert fusion in ("average", "concat"), f"fusion must be 'average' or 'concat', got {fusion!r}"
         assert len(images) == len(texts), "images and texts must have same length"
