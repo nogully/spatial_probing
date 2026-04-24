@@ -140,6 +140,7 @@ spatial_probing/
 - Liu et al. (2022) — VSR: [Visual Spatial Reasoning](https://arxiv.org/abs/2205.00363)
 - Belinkov (2022) — [Probing Classifiers: Promises, Shortcomings, and Advances](https://direct.mit.edu/coli/article/48/1/207/107571)
 - Tong et al. (2024) — [Eyes Wide Shut? Exploring the Visual Shortcomings of Multimodal LLMs](https://arxiv.org/abs/2401.06209)
+- Levinson, S.C. (2003) — *Space in Language and Cognition: Explorations in Cognitive Diversity*. Cambridge University Press.
 
 ---
 
