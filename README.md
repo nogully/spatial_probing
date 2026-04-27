@@ -20,7 +20,7 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ## Main Deliverable
 
-[spatial_probing_results.ipynb](spatial_probing_results.ipynb)
+[Gully_Probing_Study.ipynb](Gully_Probing_Study.ipynb)
 
 ## Results Summary
 
@@ -37,17 +37,6 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ![Main Results Heatmap](results/figures/05_main_heatmap.png)
 
-### CLIP Text vs SBERT / CLIP Image
-
-![CLIP Gains](results/figures/05_clip_gains.png)
-
-### F1 Distribution across Models
-
-![Model Comparison](results/figures/05_model_comparison.png)
-
-### Relation Type Clustering (by CLIP Text Embedding Similarity)
-
-![Relation Dendrogram](results/figures/05_relation_dendrogram.png)
 
 ---
 
@@ -138,8 +127,7 @@ spatial_probing/
 - Radford et al. (2021) — CLIP: [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
 - Reimers & Gurevych (2019) — SBERT: [Sentence-BERT](https://arxiv.org/abs/1908.10084)
 - Liu et al. (2022) — VSR: [Visual Spatial Reasoning](https://arxiv.org/abs/2205.00363)
-- Belinkov (2022) — [Probing Classifiers: Promises, Shortcomings, and Advances](https://direct.mit.edu/coli/article/48/1/207/107571)
-- Tong et al. (2024) — [Eyes Wide Shut? Exploring the Visual Shortcomings of Multimodal LLMs](https://arxiv.org/abs/2401.06209)
+
 
 ---
 
