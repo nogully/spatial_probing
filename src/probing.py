@@ -11,7 +11,8 @@ from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, cross_val_score, cross_validate
 from sklearn.metrics import f1_score, accuracy_score, precision_score, recall_score, make_scorer
-from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 
 class LogisticRegressionProbe:
@@ -245,6 +246,7 @@ def probe_truth_by_relation(
     C: float = 1.0,
     min_samples: int = 50,
     groups: Optional[GroupKeys] = None,
+    standardize: bool = False,
 ) -> pd.DataFrame:
     """
     Within-relation caption-truth probe.
@@ -282,6 +284,8 @@ def probe_truth_by_relation(
         C: Regularization hyperparameter
         min_samples: Skip relations with fewer than this many examples
         groups: Optional CV grouping key(s), see above
+        standardize: If True, fit a StandardScaler on each training fold and
+            apply it before the probe (diagnostic only; default False)
 
     Returns:
         DataFrame, one row per relation, sorted by n_samples (descending):
@@ -346,6 +350,8 @@ def probe_truth_by_relation(
                 )
 
             clf = LogisticRegression(C=C, max_iter=1000, solver="lbfgs", random_state=42)
+            if standardize:
+                clf = make_pipeline(StandardScaler(), clf)
             clf.fit(X[train_idx], y[train_idx])
             y_pred = clf.predict(X[test_idx])
 
