@@ -444,3 +444,175 @@ def model_comparison_table(
     return combined.sort_values(
         ["n_samples", "relation"], ascending=[False, True]
     ).reset_index(drop=True)
+
+
+def _normalize_group_keys(groups: Optional[GroupKeys]) -> Optional[list]:
+    """Return None, or a list of (N,) key arrays, from the `groups` argument."""
+    if groups is None:
+        return None
+    if isinstance(groups, np.ndarray) and groups.ndim == 1:
+        return [groups]
+    return [np.asarray(g) for g in groups]
+
+
+def _truth_cv_splits(
+    X: np.ndarray, y: np.ndarray, rel_groups: Optional[np.ndarray], n_splits: int
+) -> list:
+    """Train/test index pairs: the same folds `probe_truth_by_relation` uses."""
+    if rel_groups is None:
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    else:
+        cv = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    return list(cv.split(X, y, rel_groups))
+
+
+def _make_truth_probe(C: float, standardize: bool):
+    clf = LogisticRegression(C=C, max_iter=1000, solver="lbfgs", random_state=42)
+    return make_pipeline(StandardScaler(), clf) if standardize else clf
+
+
+def truth_probe_oof_predictions(
+    embeddings: np.ndarray,
+    relation_labels: np.ndarray,
+    binary_labels: np.ndarray,
+    n_splits: int = 5,
+    C: float = 1.0,
+    min_samples: int = 50,
+    groups: Optional[GroupKeys] = None,
+    standardize: bool = False,
+) -> pd.DataFrame:
+    """
+    Out-of-fold predictions of the within-relation truth probe, one row per example.
+
+    Uses the same probe and the same folds as `probe_truth_by_relation`, so
+    per-relation fold scores computed from this output match that function.
+
+    Returns:
+        DataFrame with columns:
+            - 'row': index into the input arrays
+            - 'relation', 'fold' (0..n_splits-1)
+            - 'y_true', 'y_pred'
+        Only rows of relations with at least `min_samples` examples appear.
+    """
+    binary_labels = np.asarray(binary_labels).astype(int)
+    relation_labels = np.asarray(relation_labels)
+    group_keys = _normalize_group_keys(groups)
+
+    frames = []
+    for relation in sorted(np.unique(relation_labels)):
+        rows = np.flatnonzero(relation_labels == relation)
+        if len(rows) < min_samples:
+            continue
+        X, y = embeddings[rows], binary_labels[rows]
+        rel_groups = None if group_keys is None else make_groups(*[k[rows] for k in group_keys])
+        for fold, (train_idx, test_idx) in enumerate(_truth_cv_splits(X, y, rel_groups, n_splits)):
+            clf = _make_truth_probe(C, standardize)
+            clf.fit(X[train_idx], y[train_idx])
+            frames.append(pd.DataFrame({
+                "row": rows[test_idx],
+                "relation": relation,
+                "fold": fold,
+                "y_true": y[test_idx],
+                "y_pred": clf.predict(X[test_idx]),
+            }))
+    return pd.concat(frames, ignore_index=True)
+
+
+def _relation_mean_f1(
+    X: np.ndarray, y: np.ndarray, rel_groups: Optional[np.ndarray],
+    n_splits: int, C: float, standardize: bool,
+) -> float:
+    """Mean macro F1 over folds for one relation (the truth-probe statistic)."""
+    scores = []
+    for train_idx, test_idx in _truth_cv_splits(X, y, rel_groups, n_splits):
+        if len(np.unique(y[train_idx])) < 2:
+            raise ValueError("a training fold contains a single class")
+        clf = _make_truth_probe(C, standardize)
+        clf.fit(X[train_idx], y[train_idx])
+        scores.append(f1_score(y[test_idx], clf.predict(X[test_idx]), average="macro", zero_division=0))
+    return float(np.mean(scores))
+
+
+def _one_permutation(perm_index, rel_data, n_splits, C, standardize, seed):
+    """Macro F1 per relation for one label permutation (perm_index < 0 = observed)."""
+    rng = np.random.default_rng([seed, max(perm_index, 0)])
+    out = []
+    for X, y, rel_groups in rel_data:
+        y_used = y if perm_index < 0 else rng.permutation(y)
+        out.append(_relation_mean_f1(X, y_used, rel_groups, n_splits, C, standardize))
+    return out
+
+
+def permutation_test_truth_probe(
+    embeddings: np.ndarray,
+    relation_labels: np.ndarray,
+    binary_labels: np.ndarray,
+    n_permutations: int = 1000,
+    n_splits: int = 5,
+    C: float = 1.0,
+    min_samples: int = 50,
+    groups: Optional[GroupKeys] = None,
+    standardize: bool = False,
+    n_jobs: int = 1,
+    seed: int = 42,
+) -> tuple[pd.DataFrame, np.ndarray]:
+    """
+    Label-permutation test for the within-relation truth probe.
+
+    The statistic for a relation is the mean macro F1 over the CV folds, as in
+    `probe_truth_by_relation`. The null distribution is built by shuffling the
+    True/False labels within the relation (embeddings and CV groups stay
+    fixed) and repeating the whole cross-validation, `n_permutations` times.
+    Permutation i uses `np.random.default_rng([seed, i])` for every relation,
+    so row i of the returned null matrix is one joint draw across relations
+    and the across-relation mean has its own null distribution.
+
+    p-values are one-sided with the +1 correction:
+        p_upper = (1 + #{null >= observed}) / (1 + n_permutations)
+        p_lower = (1 + #{null <= observed}) / (1 + n_permutations)
+
+    Returns:
+        (per_relation, null) where
+        per_relation: DataFrame, one row per relation sorted by n_samples
+            (descending): relation, n_samples, observed_f1, null_mean,
+            null_std, null_p2.5, null_p50, null_p95, null_p97.5, p_upper, p_lower
+        null: (n_permutations, n_relations) array of null macro F1, columns in
+            the same order as per_relation's rows
+    """
+    from joblib import Parallel, delayed
+
+    binary_labels = np.asarray(binary_labels).astype(int)
+    relation_labels = np.asarray(relation_labels)
+    group_keys = _normalize_group_keys(groups)
+
+    counts = pd.Series(relation_labels).value_counts()
+    relations = [r for r in counts.index if counts[r] >= min_samples]
+    relations.sort(key=lambda r: (-counts[r], r))
+
+    rel_data = []
+    for relation in relations:
+        mask = relation_labels == relation
+        rel_groups = None if group_keys is None else make_groups(*[k[mask] for k in group_keys])
+        rel_data.append((embeddings[mask], binary_labels[mask], rel_groups))
+
+    observed = np.array(_one_permutation(-1, rel_data, n_splits, C, standardize, seed))
+    null = np.array(Parallel(n_jobs=n_jobs)(
+        delayed(_one_permutation)(i, rel_data, n_splits, C, standardize, seed)
+        for i in range(n_permutations)
+    ))
+
+    tol = 1e-12
+    per_relation = pd.DataFrame({
+        "relation": relations,
+        "n_samples": [int(counts[r]) for r in relations],
+        "observed_f1": observed,
+        "null_mean": null.mean(axis=0),
+        "null_std": null.std(axis=0),
+        "null_p2.5": np.percentile(null, 2.5, axis=0),
+        "null_p50": np.percentile(null, 50, axis=0),
+        "null_p95": np.percentile(null, 95, axis=0),
+        "null_p97.5": np.percentile(null, 97.5, axis=0),
+        "p_upper": (1 + (null >= observed - tol).sum(axis=0)) / (1 + n_permutations),
+        "p_lower": (1 + (null <= observed + tol).sum(axis=0)) / (1 + n_permutations),
+    })
+    return per_relation, null
