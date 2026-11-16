@@ -24,18 +24,32 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ## Results Summary
 
-### Mean F1 by Model (36 relations, min 50 examples)
+Within-relation truth probe: for each relation with at least 50 training examples, a logistic regression probe (C=1.0) is trained on that relation's examples to predict VSR's True/False caption label. Macro F1, 5-fold CV, 36 relations.
 
-| Model | Mean F1 |
-|---|---|
-| SBERT (`all-mpnet-base-v2`) | 0.710 |
-| CLIP Text encoder | 0.589 |
-| CLIP Concat (image + text, 1024d) | 0.514 |
-| CLIP Image encoder | 0.493 |
+"Stratified" is plain `StratifiedKFold`. "Grouped" is `StratifiedGroupKFold`, grouped by caption (SBERT, CLIP Text), by image (CLIP Image), or jointly by caption and image (CLIP Concat).
+
+| Condition | Stratified: mean | median | min | max | Grouped: mean | median | min | max |
+|---|---|---|---|---|---|---|---|---|
+| SBERT (`all-mpnet-base-v2`) | 0.370 | 0.384 | 0.251 | 0.474 | 0.463 | 0.463 | 0.365 | 0.537 |
+| CLIP Text encoder | 0.370 | 0.368 | 0.233 | 0.502 | 0.445 | 0.446 | 0.342 | 0.532 |
+| CLIP Image encoder | 0.506 | 0.521 | 0.361 | 0.687 | 0.503 | 0.474 | 0.344 | 0.730 |
+| CLIP Concat (image + text, 1024d) | 0.455 | 0.422 | 0.315 | 0.689 | 0.488 | 0.506 | 0.349 | 0.680 |
+| Dummy baseline: `most_frequent` | 0.350 | 0.347 | 0.334 | 0.412 | 0.350 | | | |
+| Dummy baseline: `stratified` | 0.494 | 0.498 | 0.371 | 0.593 | 0.484–0.488 | | | |
+
+Grouped-fold baselines vary slightly by condition because the folds differ; the range of means is shown.
+
+SBERT vs CLIP Text, relations won / tied / lost by SBERT (tie = difference < 1e-9): stratified folds 15 / 1 / 20; grouped folds 28 / 1 / 7.
+
+Full tables: [results/truth_probe/](results/truth_probe/). Additional diagnostics (interaction features, bag-of-words baseline, regularization sweep): [results/diagnostics/](results/diagnostics/).
 
 ### Main Results Heatmap
 
 ![Main Results Heatmap](results/figures/05_main_heatmap.png)
+
+### Correction
+
+The first version of this project probed relation identity (a one-vs-rest "is this caption about relation X?" classifier over all 7,680 examples) rather than caption truth within each relation. Those results are kept in [results/relation_identity/](results/relation_identity/), with the corresponding heatmap at [results/figures/05_relation_identity_heatmap.png](results/figures/05_relation_identity_heatmap.png).
 
 
 ---
@@ -44,7 +58,7 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 | Model | Type | Training Objective | Visual Signal |
 |---|---|---|---|
-| `sentence-transformers/all-mpnet-base-v2` | SBERT | NLI + semantic similarity | None |
+| `sentence-transformers/all-mpnet-base-v2` | SBERT (MPNet-based) | Contrastive, over 1 billion sentence pairs | None |
 | `openai/clip-vit-base-patch32` (text encoder) | CLIP Text | Contrastive image-text | Indirect |
 | `openai/clip-vit-base-patch32` (image encoder) | CLIP Image | Contrastive image-text | Direct |
 | CLIP text + image (concat, 1024d) | CLIP Concat | Contrastive image-text | Both |
@@ -87,10 +101,11 @@ Sync the following files to `results/embeddings/` locally before running probing
 
 ### Probing and Visualization (local)
 
-Run notebooks 03 + 05 locally:
+Run notebooks 03, 04 + 05 locally:
 
 ```
-notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs
+notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs to results/truth_probe/
+notebooks/04_diagnostics.ipynb           # extra analyses, saves CSVs to results/diagnostics/
 notebooks/05_visualization.ipynb         # all graphics (I like data viz)
 ```
 
@@ -101,22 +116,28 @@ notebooks/05_visualization.ipynb         # all graphics (I like data viz)
 ```
 spatial_probing/
 ├── README.md
+├── Gully_Probing_Study.ipynb    # main deliverable (loads pre-computed results)
+├── Gully_Probing_Study.html
 ├── requirements.txt
-├── .env                         # gitignored — set CACHE_DIR here
+├── smoke_test.py
+├── .env.example                 # copy to .env (gitignored) and set CACHE_DIR
 │
 ├── notebooks/
-│   ├── 01_data_exploration.ipynb
 │   ├── 02_embedding_extraction.ipynb    # run on Colab
 │   ├── 03_probing_experiments.ipynb
+│   ├── 04_diagnostics.ipynb
 │   └── 05_visualization.ipynb
 │
 ├── src/
 │   ├── datasets.py              # VSR loader
 │   ├── embedders.py             # SBERT, CLIP text, image, concat embedders
-│   └── probing.py               # logistic regression probe + CV
+│   └── probing.py               # logistic regression probes + CV
 │
 └── results/
     ├── embeddings/              # cached .npy files — gitignored
+    ├── truth_probe/             # within-relation True/False probe results
+    ├── relation_identity/       # earlier one-vs-rest relation-identity results
+    ├── diagnostics/             # extra analyses
     └── figures/                 # output plots
 ```
 

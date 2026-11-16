@@ -35,8 +35,9 @@ class VSRDataset:
     https://arxiv.org/abs/2205.00363
     
     Format: (image, caption, relation, label)
-    Relations: 66 spatial relation types (on, under, above, below, left of, etc.)
-    Size: ~10k examples
+    Relations: spatial relation types (on, under, above, below, left of, etc.);
+        the vsr_random train split contains 64
+    Size: 7,680 examples in the vsr_random train split
     """
 
     def __init__(self, split: str = "train", variant: str = "random"):
