@@ -4,17 +4,17 @@
 
 One known weakness of language models is spatial reasoning. Having learned from text alone, they have no perceptual grounding for concepts like *above*, *left of*, or *inside* — they've only ever seen these words in context, never experienced what they refer to.
 
-CLIP changes the training regime: instead of predicting masked tokens, it learns to align image-caption pairs. The hypothesis here is that this contrastive visual training leaves a residue in the text embedding space — making spatial relations more linearly decodable, even when no image is present at inference time.
+CLIP changes the training regime: instead of predicting masked tokens, it learns to align image-caption pairs. The hypothesis here is that this contrastive image-text training leaves a residue in the text embedding space — making spatial relations more linearly decodable, even when no image is present at inference time.
 
 This study tests that hypothesis using **probing classifiers**: lightweight logistic regression models trained on frozen embeddings to ask whether spatial relation labels are linearly decodable from each representation.
 
-> *N.B. I am disclosing that I used AI (Claude Code) to assist with coding in this project, as encouraged in the course. Research design, experimental decisions, and interpretation of results are my own.*
+> *N.B. I am disclosing that I used AI (Claude Code) to assist with coding in this project, as encouraged in the course.*
 
 ---
 
-## Research Question
+## Initial Research Question
 
-> Does visual contrastive training (CLIP) produce text embeddings that encode spatial relations better than purely distributional training (SBERT)? And which specific relation types benefit — or remain resistant?
+> Are spatial relations more linearly decodable from text embeddings produced by image–text contrastive training in a multimodal model (CLIP) than from those produced by text–text contrastive training in a text-only model (SBERT)? 
 
 ---
 
@@ -24,24 +24,36 @@ This study tests that hypothesis using **probing classifiers**: lightweight logi
 
 ## Results Summary
 
-Within-relation truth probe: for each relation with at least 50 training examples, a logistic regression probe (C=1.0) is trained on that relation's examples to predict VSR's True/False caption label. Macro F1, 5-fold CV, 36 relations.
+Within-relation truth probe: for each relation with at least 50 training examples, a probe is trained on that relation's examples to predict VSR's True/False caption label.
 
-"Stratified" is plain `StratifiedKFold`. "Grouped" is `StratifiedGroupKFold`, grouped by caption (SBERT, CLIP Text), by image (CLIP Image), or jointly by caption and image (CLIP Concat).
+- Probe: `StandardScaler` + logistic regression (C=1.0)
+- Cross-validation: grouped 5-fold (`StratifiedGroupKFold`), grouped by caption (SBERT, CLIP Text), by image (CLIP Image), or jointly by caption and image (CLIP Concat)
+- Metric: macro F1
+- Chance reference: label-permutation test, 1,000 shuffles within each relation; p-values are one-sided, and the smallest possible value is 0.001
 
-| Condition | Stratified: mean | median | min | max | Grouped: mean | median | min | max |
-|---|---|---|---|---|---|---|---|---|
-| SBERT (`all-mpnet-base-v2`) | 0.370 | 0.384 | 0.251 | 0.474 | 0.463 | 0.463 | 0.365 | 0.537 |
-| CLIP Text encoder | 0.370 | 0.368 | 0.233 | 0.502 | 0.445 | 0.446 | 0.342 | 0.532 |
-| CLIP Image encoder | 0.506 | 0.521 | 0.361 | 0.687 | 0.503 | 0.474 | 0.344 | 0.730 |
-| CLIP Concat (image + text, 1024d) | 0.455 | 0.422 | 0.315 | 0.689 | 0.488 | 0.506 | 0.349 | 0.680 |
-| Dummy baseline: `most_frequent` | 0.350 | 0.347 | 0.334 | 0.412 | 0.350 | | | |
-| Dummy baseline: `stratified` | 0.494 | 0.498 | 0.371 | 0.593 | 0.484–0.488 | | | |
+All 36 relations (n ≥ 50):
 
-Grouped-fold baselines vary slightly by condition because the folds differ; the range of means is shown.
+| Condition | Mean | Median | Min | Max | Permutation null mean (95% range) | p for the mean | Relations with p < 0.05 (raw / Holm) |
+|---|---|---|---|---|---|---|---|
+| SBERT (`all-mpnet-base-v2`) | 0.487 | 0.489 | 0.386 | 0.592 | 0.482 (0.463–0.500) | 0.288 | 0 / 0 |
+| CLIP Text encoder | 0.489 | 0.481 | 0.410 | 0.589 | 0.482 (0.463–0.501) | 0.234 | 0 / 0 |
+| CLIP Image encoder | 0.543 | 0.530 | 0.374 | 0.701 | 0.492 (0.472–0.511) | 0.001 | 12 / 6 |
+| CLIP Concat (image + text, 1024d) | 0.553 | 0.551 | 0.323 | 0.709 | 0.486 (0.468–0.506) | 0.001 | 13 / 6 |
 
-SBERT vs CLIP Text, relations won / tied / lost by SBERT (tie = difference < 1e-9): stratified folds 15 / 1 / 20; grouped folds 28 / 1 / 7.
+The 19 relations with n ≥ 150:
 
-Full tables: [results/truth_probe/](results/truth_probe/). Additional diagnostics (interaction features, bag-of-words baseline, regularization sweep): [results/diagnostics/](results/diagnostics/).
+| Condition | Mean | Median | Min | Max | Permutation null mean (95% range) | p for the mean | Relations with p < 0.05 (raw / Holm) |
+|---|---|---|---|---|---|---|---|
+| SBERT (`all-mpnet-base-v2`) | 0.493 | 0.493 | 0.446 | 0.518 | 0.488 (0.471–0.505) | 0.304 | 0 / 0 |
+| CLIP Text encoder | 0.495 | 0.506 | 0.446 | 0.545 | 0.488 (0.471–0.506) | 0.215 | 0 / 0 |
+| CLIP Image encoder | 0.573 | 0.550 | 0.465 | 0.693 | 0.497 (0.479–0.515) | 0.001 | 10 / 7 |
+| CLIP Concat (image + text, 1024d) | 0.579 | 0.586 | 0.466 | 0.709 | 0.493 (0.475–0.511) | 0.001 | 10 / 8 |
+
+SBERT vs CLIP Text, relations won / tied / lost by SBERT (tie = difference < 1e-9), all 36 relations: 17 / 0 / 19.
+
+With plain stratified folds instead of grouped folds, mean macro F1 over the 36 relations is 0.308 / 0.304 / 0.539 / 0.478 (SBERT / CLIP Text / CLIP Image / CLIP Concat).
+
+Full tables: [results/truth_probe/](results/truth_probe/). Other settings and checks (regularization sweep, repeated captions across stratified folds, interaction features, bag-of-words baseline): [results/diagnostics/](results/diagnostics/).
 
 ### Main Results Heatmap
 
@@ -101,9 +113,10 @@ Sync the following files to `results/embeddings/` locally before running probing
 
 ### Probing and Visualization (local)
 
-Run notebooks 03, 04 + 05 locally:
+Run the permutation test, then notebooks 03, 04 + 05 locally:
 
 ```
+python permutation_test.py --standardize --C 1.0 --cv grouped --models sbert clip_text clip_image clip_concat
 notebooks/03_probing_experiments.ipynb   # trains probes, saves CSVs to results/truth_probe/
 notebooks/04_diagnostics.ipynb           # extra analyses, saves CSVs to results/diagnostics/
 notebooks/05_visualization.ipynb         # all graphics (I like data viz)
@@ -120,6 +133,7 @@ spatial_probing/
 ├── Gully_Probing_Study.html
 ├── requirements.txt
 ├── smoke_test.py
+├── permutation_test.py       # label-permutation test for the truth probe
 ├── .env.example                 # copy to .env (gitignored) and set CACHE_DIR
 │
 ├── notebooks/
