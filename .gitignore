@@ -1,5 +1,7 @@
 # Claude Code instructions — local only, not for repo
 CLAUDE.md
+PROBE_FIX_INSTRUCTIONS.md
+PROBE_FIX_REPORT.md
 
 # Environment
 .env

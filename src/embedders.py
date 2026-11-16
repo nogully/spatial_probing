@@ -143,7 +143,7 @@ class CLIPTextEmbedder(BaseEmbedder):
                 # Forward pass
                 outputs = self.model(**inputs)
                 
-                # Get pooled embeddings (cls token)
+                # Get pooled embeddings (EOS token)
                 batch_emb = outputs.pooler_output.cpu().numpy()  # (batch_size, 512)
                 
                 # L2 normalize

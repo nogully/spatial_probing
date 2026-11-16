@@ -1,0 +1,25 @@
+cv,relations,a,b,a_wins,ties,a_losses,mean_diff_a_minus_b
+grouped,all (n >= 50),sbert,clip_text,17,0,19,-0.0018946967688201416
+grouped,all (n >= 50),sbert,clip_image,11,0,25,-0.05559443531902572
+grouped,all (n >= 50),sbert,clip_concat,7,0,29,-0.06574845203335755
+grouped,all (n >= 50),clip_text,clip_image,10,0,26,-0.05369973855020558
+grouped,all (n >= 50),clip_text,clip_concat,6,0,30,-0.06385375526453738
+grouped,all (n >= 50),clip_image,clip_concat,13,0,23,-0.010154016714331814
+grouped,n >= 150,sbert,clip_text,8,0,11,-0.0018251697370427755
+grouped,n >= 150,sbert,clip_image,3,0,16,-0.07995111003131225
+grouped,n >= 150,sbert,clip_concat,1,0,18,-0.08559278706418634
+grouped,n >= 150,clip_text,clip_image,4,0,15,-0.07812594029426946
+grouped,n >= 150,clip_text,clip_concat,2,0,17,-0.08376761732714355
+grouped,n >= 150,clip_image,clip_concat,8,0,11,-0.005641677032874093
+stratified,all (n >= 50),sbert,clip_text,21,0,15,0.003880546696846367
+stratified,all (n >= 50),sbert,clip_image,0,0,36,-0.2305894292477976
+stratified,all (n >= 50),sbert,clip_concat,1,0,35,-0.16992839737726692
+stratified,all (n >= 50),clip_text,clip_image,0,0,36,-0.23446997594464397
+stratified,all (n >= 50),clip_text,clip_concat,1,0,35,-0.17380894407411332
+stratified,all (n >= 50),clip_image,clip_concat,35,0,1,0.06066103187053066
+stratified,n >= 150,sbert,clip_text,13,0,6,0.01283434021038669
+stratified,n >= 150,sbert,clip_image,0,0,19,-0.23608055756430368
+stratified,n >= 150,sbert,clip_concat,0,0,19,-0.2020039778399083
+stratified,n >= 150,clip_text,clip_image,0,0,19,-0.24891489777469036
+stratified,n >= 150,clip_text,clip_concat,0,0,19,-0.214838318050295
+stratified,n >= 150,clip_image,clip_concat,18,0,1,0.03407657972439532
